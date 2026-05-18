@@ -39,6 +39,7 @@ class Aplicacion:
         self._pantalla = None
 
         self._configurar_ventana()
+        self._registrar_atajos_globales()
         self._ir_login()
 
     def ejecutar(self):
@@ -71,6 +72,35 @@ class Aplicacion:
         if self._pantalla is not None:
             self._pantalla.destroy()
         self._pantalla = nueva
+
+    def _registrar_atajos_globales(self):
+        """
+        Registra los atajos de teclado globales en la ventana raíz.
+        Al estar en el root persisten durante toda la sesión sin importar
+        qué pantalla esté activa. Solo ejecutan la acción si hay sesión abierta.
+        """
+        def _solo_si_logueado(callback):
+            return lambda _e: callback() if self._usuario else None
+
+        # <Alt-Key-N> es la forma correcta para Alt+tecla numérica en Tkinter.
+        # <Alt-N> (sin "Key-") se interpreta como Alt+botón del mouse N.
+        atajos = [
+            ("<Alt-Key-1>", self._on_cargar_documento),
+            ("<Alt-Key-2>", self._on_cargar_audio),
+            ("<Alt-Key-3>", self._on_tts),
+            ("<Alt-Key-4>", self._on_historial),
+            ("<Alt-s>",     self._on_logout),
+            ("<Alt-S>",     self._on_logout),
+        ]
+        for secuencia, accion in atajos:
+            self._root.bind(secuencia, _solo_si_logueado(accion))
+
+        self._root.bind(
+            "<Escape>",
+            lambda _e: self._ir_menu()
+            if self._usuario and not isinstance(self._pantalla, MainMenu)
+            else None,
+        )
 
     def _ir_login(self):
         self._cambiar_pantalla(

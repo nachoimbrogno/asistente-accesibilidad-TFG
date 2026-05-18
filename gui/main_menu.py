@@ -89,7 +89,6 @@ class MainMenu(tk.Frame):
         self.pack(fill=tk.BOTH, expand=True)
         self._construir_header()
         self._construir_grid()
-        self._registrar_atajos()
 
     # =====================================
     # Header
@@ -151,23 +150,6 @@ class MainMenu(tk.Frame):
             callback = self._callbacks[clave]
             tarjeta = _Tarjeta(area, titulo, descripcion, formatos, atajo, callback)
             tarjeta.grid(row=fila, column=columna, padx=14, pady=14, sticky="nsew")
-
-    # =====================================
-    # Atajos de teclado
-    # =====================================
-
-    def _registrar_atajos(self):
-        """Asocia Alt+1…4 a cada tarjeta y Alt+S al logout."""
-        atajos = [
-            ("<Alt-1>", self._callbacks["on_cargar_documento"]),
-            ("<Alt-2>", self._callbacks["on_cargar_audio"]),
-            ("<Alt-3>", self._callbacks["on_tts"]),
-            ("<Alt-4>", self._callbacks["on_historial"]),
-            ("<Alt-s>", self._on_logout),
-            ("<Alt-S>", self._on_logout),
-        ]
-        for secuencia, accion in atajos:
-            self.bind_all(secuencia, lambda _e, a=accion: a())
 
 
 class _Tarjeta(tk.Frame):

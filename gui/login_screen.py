@@ -25,6 +25,7 @@ _ACENTO_ACT  = "#4a7ce0"
 _ERROR       = "#f05050"
 _EXITO       = "#50c878"
 _ENTRADA     = "#3a3a4d"
+_PISTA       = "#9090a8"
 _FUENTE      = "Segoe UI"
 
 
@@ -158,6 +159,17 @@ class LoginScreen(tk.Frame):
         _campo(frame, "Apellido:",             self._var_reg_apellido)
         _campo(frame, "Nombre de usuario:",    self._var_reg_user)
         _campo(frame, "Contraseña:",           self._var_reg_pass,  ocultar=True)
+
+        tk.Label(
+            frame,
+            text="Debe tener al menos 8 caracteres, una mayúscula, una minúscula y un número.",
+            bg=_CARD, fg=_PISTA,
+            font=(_FUENTE, 8),
+            wraplength=300,
+            justify=tk.LEFT,
+            anchor=tk.W,
+        ).pack(fill=tk.X, pady=(3, 0))
+
         _campo(frame, "Confirmar contraseña:", self._var_reg_pass2, ocultar=True)
 
         _boton_principal(frame, "Registrarse", self._intentar_registro).pack(
@@ -249,8 +261,9 @@ class LoginScreen(tk.Frame):
             self._error("El nombre de usuario no puede contener espacios.")
             return
 
-        if len(password) < 8:
-            self._error("La contraseña debe tener al menos 8 caracteres.")
+        error_pass = _validar_password(password)
+        if error_pass:
+            self._error(error_pass)
             return
 
         if password != password2:
@@ -348,6 +361,22 @@ def _boton_principal(parent: tk.Frame, texto: str, comando) -> tk.Button:
         cursor="hand2",
         pady=10,
     )
+
+
+def _validar_password(password: str) -> str:
+    """
+    Verifica que la contraseña cumpla los requisitos mínimos de seguridad.
+    Devuelve un mensaje de error descriptivo, o cadena vacía si es válida.
+    """
+    if len(password) < 8:
+        return "La contraseña debe tener al menos 8 caracteres."
+    if not any(c.isupper() for c in password):
+        return "La contraseña debe incluir al menos una letra mayúscula."
+    if not any(c.islower() for c in password):
+        return "La contraseña debe incluir al menos una letra minúscula."
+    if not any(c.isdigit() for c in password):
+        return "La contraseña debe incluir al menos un número."
+    return ""
 
 
 def _formatear_fecha(iso: str) -> str:
