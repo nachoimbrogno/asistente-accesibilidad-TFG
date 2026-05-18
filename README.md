@@ -81,7 +81,36 @@ Descargar desde [python.org](https://www.python.org/downloads/) si no está inst
 
 ---
 
-### Requisito previo 2 — Tesseract OCR
+### Requisito previo 2 — ffmpeg
+
+ffmpeg es necesario para que Whisper (STT) pueda decodificar y convertir archivos de audio. Sin él, la transcripción falla al intentar procesar cualquier archivo.
+
+**Windows**
+
+```bash
+winget install ffmpeg
+```
+
+O descargar el instalador desde https://ffmpeg.org/download.html y agregar la carpeta `bin/` al PATH del sistema.
+
+Verificar la instalación:
+
+```bash
+ffmpeg -version
+```
+
+> Después de instalar ffmpeg es necesario **reiniciar la terminal** (o la aplicación) para que el nuevo PATH sea reconocido.
+
+**Linux (Ubuntu/Debian)**
+
+```bash
+sudo apt update
+sudo apt install ffmpeg
+```
+
+---
+
+### Requisito previo 3 — Tesseract OCR
 
 Tesseract es el motor de reconocimiento de texto que usa el módulo OCR. Debe instalarse a nivel del sistema operativo, no mediante pip.
 

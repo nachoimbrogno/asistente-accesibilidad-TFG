@@ -62,11 +62,12 @@ class TTSScreen(tk.Frame):
         on_volver,
     ):
         super().__init__(master, bg=_FONDO)
-        self._usuario       = usuario
-        self._db            = db
-        self._logger        = logger
-        self._on_volver     = on_volver
-        self._en_proceso    = False     # impide operaciones concurrentes
+        self._usuario    = usuario
+        self._db         = db
+        self._logger     = logger
+        self._on_volver  = on_volver
+        self._estado     = "idle"   # idle | playing | paused
+        self._guardando  = False    # True mientras se genera el WAV
 
         self.pack(fill=tk.BOTH, expand=True)
         self._construir_header()
@@ -177,7 +178,7 @@ class TTSScreen(tk.Frame):
         ).pack(fill=tk.X)
 
     def _construir_botonera(self, parent: tk.Frame):
-        """Botones de acción: Reproducir y Guardar como audio."""
+        """Botones de acción con grid para poder mostrar/ocultar Detener sin perder el orden."""
         frame = tk.Frame(parent, bg=_FONDO)
         frame.pack(anchor=tk.W, pady=(0, 8))
 
@@ -191,7 +192,20 @@ class TTSScreen(tk.Frame):
             relief=tk.FLAT, cursor="hand2",
             padx=18, pady=9,
         )
-        self._btn_reproducir.pack(side=tk.LEFT, padx=(0, 12))
+        self._btn_reproducir.grid(row=0, column=0, padx=(0, 10))
+
+        self._btn_detener = tk.Button(
+            frame,
+            text="⏹  Detener",
+            command=self._detener_reproduccion,
+            bg="#c0392b", fg="#ffffff",
+            activebackground="#a93226", activeforeground="#ffffff",
+            font=(_FUENTE, 11, "bold"),
+            relief=tk.FLAT, cursor="hand2",
+            padx=18, pady=9,
+        )
+        self._btn_detener.grid(row=0, column=1, padx=(0, 10))
+        self._btn_detener.grid_remove()   # oculto en estado idle
 
         self._btn_guardar = tk.Button(
             frame,
@@ -203,28 +217,43 @@ class TTSScreen(tk.Frame):
             relief=tk.FLAT, cursor="hand2",
             padx=18, pady=9,
         )
-        self._btn_guardar.pack(side=tk.LEFT)
+        self._btn_guardar.grid(row=0, column=2)
 
     # =====================================
     # Acciones
     # =====================================
 
     def _reproducir(self):
-        """
-        Reproduce el texto por los altavoces en un hilo de fondo.
-        Deshabilita los botones durante la reproducción para evitar llamadas concurrentes.
-        """
+        """Inicia la reproducción en un hilo de fondo y transiciona a estado 'playing'."""
         texto = self._leer_texto()
         if texto is None:
             return
-
-        self._bloquear_botones("Reproduciendo...")
+        self._set_estado("playing")
+        self._mostrar_estado("Reproduciendo...")
         hilo = threading.Thread(
             target=self._hilo_reproducir,
             args=(texto,),
             daemon=True,
         )
         hilo.start()
+
+    def _pausar(self):
+        """Pausa la reproducción entre oraciones."""
+        tts.pausar()
+        self._set_estado("paused")
+        self._mostrar_estado("En pausa.")
+
+    def _reanudar(self):
+        """Reanuda la reproducción desde la siguiente oración."""
+        tts.reanudar()
+        self._set_estado("playing")
+        self._mostrar_estado("Reproduciendo...")
+
+    def _detener_reproduccion(self):
+        """Detiene la reproducción inmediatamente."""
+        tts.detener()
+        self._set_estado("idle")
+        self._mostrar_estado("")
 
     def _hilo_reproducir(self, texto: str):
         """Ejecuta tts.reproducir() fuera del hilo de Tkinter."""
@@ -239,10 +268,16 @@ class TTSScreen(tk.Frame):
                 f"Texto reproducido por altavoces ({len(texto)} caracteres)",
                 usuario_id=self._usuario["id"],
             )
-            self.after(0, lambda: self._desbloquear_botones(""))
         except Exception as e:
             self._logger.log(ERROR, f"Error en TTS reproducir: {e}", usuario_id=self._usuario["id"])
-            self.after(0, lambda err=e: self._desbloquear_botones(f"Error al reproducir: {err}", error=True))
+            self.after(0, lambda err=e: self._mostrar_estado(f"Error al reproducir: {err}", error=True))
+        finally:
+            self.after(0, self._on_fin_reproduccion)
+
+    def _on_fin_reproduccion(self):
+        """Llamado en el hilo principal cuando la reproducción termina (por cualquier causa)."""
+        self._set_estado("idle")
+        self._mostrar_estado("")
 
     def _guardar_audio(self):
         """
@@ -311,15 +346,49 @@ class TTSScreen(tk.Frame):
     # Helpers de UI
     # =====================================
 
+    def _set_estado(self, estado: str):
+        """
+        Aplica la configuración de botones correspondiente al estado indicado.
+            idle    → [▶ Reproducir]  [Guardar] habilitado  [Detener] oculto
+            playing → [⏸ Pausar]     [Guardar] deshabilitado [Detener] visible
+            paused  → [▶ Reanudar]   [Guardar] deshabilitado [Detener] visible
+        """
+        self._estado = estado
+
+        if estado == "idle":
+            self._btn_reproducir.config(
+                text="▶  Reproducir", command=self._reproducir,
+                bg=_ACENTO, activebackground=_ACENTO_ACT, state=tk.NORMAL,
+            )
+            self._btn_detener.grid_remove()
+            self._btn_guardar.config(state=tk.NORMAL)
+            self._txt.config(state=tk.NORMAL)
+
+        elif estado == "playing":
+            self._btn_reproducir.config(
+                text="⏸  Pausar", command=self._pausar,
+                bg=_CARD, activebackground="#383850", state=tk.NORMAL,
+            )
+            self._btn_detener.grid()
+            self._btn_guardar.config(state=tk.DISABLED)
+            self._txt.config(state=tk.DISABLED)
+
+        elif estado == "paused":
+            self._btn_reproducir.config(
+                text="▶  Reanudar", command=self._reanudar,
+                bg=_ACENTO, activebackground=_ACENTO_ACT, state=tk.NORMAL,
+            )
+            self._btn_detener.grid()
+            self._btn_guardar.config(state=tk.DISABLED)
+            self._txt.config(state=tk.DISABLED)
+
     def _leer_texto(self) -> str | None:
         """
-        Lee el contenido del área de texto y lo valida.
-        Devuelve el texto si es válido, o None si está vacío (y muestra el error).
-        No inicia ninguna operación si ya hay una en curso.
+        Lee y valida el contenido del área de texto.
+        Devuelve None (sin iniciar nada) si hay reproducción en curso o el texto está vacío.
         """
-        if self._en_proceso:
+        if self._estado != "idle" or self._guardando:
             return None
-
         texto = self._txt.get("1.0", tk.END).strip()
         if not texto:
             self._mostrar_estado("Escribí o pegá el texto antes de continuar.", error=True)
@@ -327,15 +396,15 @@ class TTSScreen(tk.Frame):
         return texto
 
     def _bloquear_botones(self, mensaje: str):
-        """Deshabilita los botones y muestra un mensaje de progreso."""
-        self._en_proceso = True
+        """Bloqueo simple para la operación de guardado (no afecta al estado de reproducción)."""
+        self._guardando = True
         self._btn_reproducir.config(state=tk.DISABLED)
         self._btn_guardar.config(state=tk.DISABLED)
         self._mostrar_estado(mensaje)
 
     def _desbloquear_botones(self, mensaje: str, error: bool = False):
-        """Rehabilita los botones y muestra el mensaje final de la operación."""
-        self._en_proceso = False
+        """Desbloqueo tras finalizar la operación de guardado."""
+        self._guardando = False
         self._btn_reproducir.config(state=tk.NORMAL)
         self._btn_guardar.config(state=tk.NORMAL)
         self._mostrar_estado(mensaje, error=error)

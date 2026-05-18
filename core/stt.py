@@ -7,6 +7,7 @@ las ejecuciones posteriores no requieren internet.
 Guarda el resultado en storage/outputs/ como archivo .txt.
 """
 
+import subprocess
 from datetime import datetime
 from pathlib import Path
 
@@ -50,12 +51,17 @@ def transcribir(
         modelo:     tamaño del modelo Whisper a usar (default 'base').
     Devuelve el texto transcrito como string.
     Lanza:
-        ValueError — el archivo no existe o tiene un formato no admitido.
+        ValueError   — el archivo no existe o tiene un formato no admitido.
+        RuntimeError — ffmpeg no está instalado en el sistema.
     """
+    _verificar_ffmpeg()
     _validar_archivo(ruta_audio)
 
     modelo_cargado = _cargar_modelo(modelo)
     opciones = {"language": idioma} if idioma else {}
+    # fp16=False evita el warning "FP16 is not supported on CPU" ya que
+    # en CPU Whisper igual cae a FP32; lo indicamos explícitamente desde el inicio.
+    opciones["fp16"] = False
     resultado = modelo_cargado.transcribe(str(ruta_audio), **opciones)
     return resultado["text"].strip()
 
@@ -81,6 +87,30 @@ def guardar_resultado(texto: str, nombre_base: str) -> Path:
 # =====================================
 # Helpers internos
 # =====================================
+
+def _verificar_ffmpeg() -> None:
+    """
+    Comprueba que ffmpeg esté disponible en el PATH del sistema.
+    Whisper lo necesita para decodificar y convertir cualquier formato de audio.
+    Lanza RuntimeError con instrucciones de instalación si no se encuentra.
+    """
+    try:
+        subprocess.run(
+            ["ffmpeg", "-version"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except FileNotFoundError:
+        raise RuntimeError(
+            "ffmpeg no está instalado o no está en el PATH del sistema.\n"
+            "Whisper lo necesita para procesar archivos de audio.\n\n"
+            "Instalación en Windows:\n"
+            "  winget install ffmpeg\n"
+            "  (o descargá el instalador desde https://ffmpeg.org/download.html)\n\n"
+            "Después de instalarlo, reiniciá la aplicación."
+        )
+
 
 def _cargar_modelo(nombre: str):
     """

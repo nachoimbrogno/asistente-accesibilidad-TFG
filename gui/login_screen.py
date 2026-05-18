@@ -193,11 +193,16 @@ class LoginScreen(tk.Frame):
         self._limpiar_feedback()
 
     def _manejar_enter(self, _event=None):
-        """Despacha la tecla Enter al formulario que esté visible en ese momento."""
-        if self._panel_login.winfo_ismapped():
-            self._intentar_login()
-        elif self._panel_registro.winfo_ismapped():
-            self._intentar_registro()
+        """Despacha la tecla Enter al formulario que esté visible en ese momento.
+        El try/except cubre el caso en que la pantalla fue destruida pero el binding
+        de bind_all aún no fue liberado por Tkinter."""
+        try:
+            if self._panel_login.winfo_ismapped():
+                self._intentar_login()
+            elif self._panel_registro.winfo_ismapped():
+                self._intentar_registro()
+        except tk.TclError:
+            pass
 
     # =====================================
     # Lógica de login

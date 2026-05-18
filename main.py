@@ -5,6 +5,12 @@ Inicializa la base de datos, el logger y la ventana principal, y gestiona
 la navegación entre pantallas a lo largo de toda la sesión.
 """
 
+import warnings
+# Silencia el warning de versiones incompatibles de urllib3/chardet que
+# dispara la librería requests (dependencia transitiva de sumy). No afecta
+# la funcionalidad de la app porque requests no se usa directamente.
+warnings.filterwarnings("ignore", message=".*doesn't match a supported version.*")
+
 import tkinter as tk
 
 from db.database import Database

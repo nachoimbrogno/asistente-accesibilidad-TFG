@@ -351,8 +351,8 @@ class ContentView(tk.Frame):
         self._txt_resultado.config(state=tk.NORMAL)
         self._txt_resultado.delete("1.0", tk.END)
         self._txt_resultado.insert(tk.END, texto)
-        # DISABLED + disabledforeground explícito para que el texto no se vea en gris
-        self._txt_resultado.config(state=tk.DISABLED, disabledforeground=_TEXTO)
+        # tk.Text no acepta disabledforeground; el color queda fijado por fg en la creación
+        self._txt_resultado.config(state=tk.DISABLED)
 
 
 # =====================================
@@ -404,7 +404,7 @@ class _DialogoResumen(tk.Toplevel):
         sb.pack(side=tk.RIGHT, fill=tk.Y)
         txt.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         txt.insert(tk.END, self._texto)
-        txt.config(state=tk.DISABLED, disabledforeground=_TEXTO)
+        txt.config(state=tk.DISABLED)
 
         # Botonera
         frame_btns = tk.Frame(self, bg=_FONDO)
