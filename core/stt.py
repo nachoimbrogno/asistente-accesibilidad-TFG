@@ -10,7 +10,9 @@ Guarda el resultado en storage/outputs/ como archivo .txt.
 from datetime import datetime
 from pathlib import Path
 
-import whisper
+# whisper se importa de forma diferida dentro de _cargar_modelo() para que
+# la aplicación pueda arrancar aunque openai-whisper no esté instalado todavía.
+# El error solo aparecerá cuando el usuario intente usar la función STT.
 
 _FORMATOS_ADMITIDOS = {".wav", ".mp3"}
 
@@ -86,6 +88,7 @@ def _cargar_modelo(nombre: str):
     Si ya fue cargado en esta sesión lo devuelve desde el caché.
     La primera carga descarga el modelo si no está en la caché local de Whisper.
     """
+    import whisper  # diferido: falla aquí si openai-whisper no está instalado
     if nombre not in _cache_modelos:
         _cache_modelos[nombre] = whisper.load_model(nombre)
     return _cache_modelos[nombre]
