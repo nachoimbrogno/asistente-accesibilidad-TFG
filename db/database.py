@@ -130,6 +130,13 @@ class Database:
         self._conn.commit()
         return cursor.lastrowid
 
+    def obtener_documento_por_id(self, documento_id: int) -> dict | None:
+        """Devuelve el documento con el id indicado, o None si no existe."""
+        row = self._conn.execute(
+            "SELECT * FROM documento WHERE id = ?", (documento_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
     def obtener_documentos_por_usuario(self, usuario_id: int) -> list[dict]:
         """Devuelve los documentos del usuario ordenados del más reciente al más antiguo."""
         rows = self._conn.execute(
@@ -165,6 +172,13 @@ class Database:
         )
         self._conn.commit()
         return cursor.lastrowid
+
+    def obtener_audio_por_id(self, audio_id: int) -> dict | None:
+        """Devuelve el audio con el id indicado, o None si no existe."""
+        row = self._conn.execute(
+            "SELECT * FROM audio WHERE id = ?", (audio_id,)
+        ).fetchone()
+        return dict(row) if row else None
 
     def obtener_audios_por_usuario(self, usuario_id: int) -> list[dict]:
         """Devuelve los audios del usuario ordenados del más reciente al más antiguo."""

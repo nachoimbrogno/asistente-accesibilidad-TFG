@@ -9,9 +9,11 @@ import tkinter as tk
 from tkinter import messagebox
 
 from db.database import Database
+from gui.content_view import ContentView
 from gui.document_upload import DocumentUpload
 from gui.login_screen import LoginScreen
 from gui.main_menu import MainMenu
+from gui.tts_screen import TTSScreen
 from security.logger import Logger, LOGOUT
 
 _FONDO = "#1e1e2e"
@@ -124,21 +126,36 @@ class Aplicacion:
         )
 
     def _on_cargado(self, archivo_id: int, modo: str):
-        """Recibe el archivo registrado. Navegará al procesamiento en el Sprint 2."""
-        tipo_legible = "documento" if modo == "documento" else "audio"
-        messagebox.showinfo(
-            "Archivo cargado",
-            f"El {tipo_legible} fue registrado correctamente (id={archivo_id}).\n"
-            "El procesamiento se habilitará en el Sprint 2.",
+        """Navega a ContentView para procesar el archivo recién registrado."""
+        self._cambiar_pantalla(
+            ContentView(
+                self._root,
+                self._usuario,
+                self._db,
+                self._logger,
+                archivo_id=archivo_id,
+                modo=modo,
+                on_volver=self._ir_menu,
+                on_ir_tts=self._on_ir_tts,
+            )
         )
-        self._ir_menu()
+
+    def _on_ir_tts(self, texto: str):
+        """Navega a la pantalla de TTS con el texto pre-cargado (HU-004)."""
+        self._cambiar_pantalla(
+            TTSScreen(
+                self._root,
+                self._usuario,
+                self._db,
+                self._logger,
+                texto_inicial=texto,
+                on_volver=self._ir_menu,
+            )
+        )
 
     def _on_tts(self):
         """Navega a la pantalla de texto a voz (HU-004)."""
-        messagebox.showinfo(
-            "Próximamente",
-            "La pantalla de Texto a Voz se implementará en el Sprint 2.",
-        )
+        self._on_ir_tts("")
 
     def _on_historial(self):
         """Navega a la pantalla de historial (HU-009)."""
