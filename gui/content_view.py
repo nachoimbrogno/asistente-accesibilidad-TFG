@@ -12,9 +12,9 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox
 
-from core import ocr, stt
+from core import ocr, stt, summarizer
 from db.database import Database
-from security.logger import ERROR, OCR as LOG_OCR, STT as LOG_STT, Logger
+from security.logger import ERROR, OCR as LOG_OCR, RESUMEN as LOG_RESUMEN, STT as LOG_STT, Logger
 
 # =====================================
 # Configuración por modo de procesamiento
@@ -308,11 +308,24 @@ class ContentView(tk.Frame):
             self._on_ir_tts(self._texto_resultado)
 
     def _generar_resumen(self):
-        """Placeholder — se implementa en Sprint 3 con core/summarizer.py (HU-010)."""
-        messagebox.showinfo(
-            "Próximamente",
-            "La generación de resumen automático se implementará en el Sprint 3.",
+        """
+        Genera un resumen extractivo del texto mostrado (HU-010).
+        Abre un diálogo con el resumen y opciones para guardarlo o enviarlo a TTS.
+        """
+        if not self._texto_resultado:
+            return
+        try:
+            texto_resumen = summarizer.resumir(self._texto_resultado)
+        except ValueError as e:
+            messagebox.showwarning("Texto insuficiente", str(e))
+            return
+
+        self._logger.log(
+            LOG_RESUMEN,
+            f"Resumen generado (proceso_id={self._proceso_id})",
+            usuario_id=self._usuario["id"],
         )
+        _DialogoResumen(self, texto_resumen, self._on_ir_tts)
 
     # =====================================
     # Helpers internos
@@ -340,3 +353,95 @@ class ContentView(tk.Frame):
         self._txt_resultado.insert(tk.END, texto)
         # DISABLED + disabledforeground explícito para que el texto no se vea en gris
         self._txt_resultado.config(state=tk.DISABLED, disabledforeground=_TEXTO)
+
+
+# =====================================
+# Diálogo de resumen — HU-010
+# =====================================
+
+class _DialogoResumen(tk.Toplevel):
+    """
+    Ventana modal que muestra el resumen generado con opciones de guardado y TTS.
+    Se crea desde ContentView._generar_resumen() cuando el texto es suficientemente largo.
+    """
+
+    def __init__(self, parent: tk.Frame, texto_resumen: str, on_ir_tts):
+        super().__init__(parent, bg=_FONDO)
+        self.title("Resumen automático")
+        self.resizable(True, True)
+        self.geometry("680x440")
+        self.grab_set()  # modal: bloquea la ventana padre
+
+        self._texto = texto_resumen
+        self._on_ir_tts = on_ir_tts
+
+        self._construir()
+
+    def _construir(self):
+        """Arma el contenido del diálogo: título, texto y botonera."""
+        tk.Label(
+            self,
+            text="Resumen generado",
+            bg=_FONDO, fg=_ACENTO,
+            font=(_FUENTE, 13, "bold"),
+        ).pack(anchor=tk.W, padx=24, pady=(20, 8))
+
+        # Área de texto solo lectura
+        frame_txt = tk.Frame(self, bg=_CARD)
+        frame_txt.pack(fill=tk.BOTH, expand=True, padx=24, pady=(0, 16))
+
+        txt = tk.Text(
+            frame_txt,
+            bg=_CARD, fg=_TEXTO,
+            font=(_FUENTE, 11),
+            relief=tk.FLAT,
+            wrap=tk.WORD,
+            padx=14, pady=12,
+            state=tk.NORMAL,
+        )
+        sb = tk.Scrollbar(frame_txt, command=txt.yview)
+        txt.configure(yscrollcommand=sb.set)
+        sb.pack(side=tk.RIGHT, fill=tk.Y)
+        txt.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        txt.insert(tk.END, self._texto)
+        txt.config(state=tk.DISABLED, disabledforeground=_TEXTO)
+
+        # Botonera
+        frame_btns = tk.Frame(self, bg=_FONDO)
+        frame_btns.pack(anchor=tk.W, padx=24, pady=(0, 20))
+
+        for texto_btn, cmd, bg, fg in [
+            ("Guardar como .txt",  self._guardar,     _ACENTO, "#ffffff"),
+            ("Enviar a TTS",       self._enviar_tts,  _CARD,   _TEXTO),
+            ("Cerrar",             self.destroy,       _CARD,   _TEXTO),
+        ]:
+            tk.Button(
+                frame_btns,
+                text=texto_btn, command=cmd,
+                bg=bg, fg=fg,
+                activebackground=_ACENTO_ACT if bg == _ACENTO else "#383850",
+                activeforeground="#ffffff" if bg == _ACENTO else _TEXTO,
+                font=(_FUENTE, 10, "bold" if bg == _ACENTO else "normal"),
+                relief=tk.FLAT, cursor="hand2",
+                padx=14, pady=7,
+            ).pack(side=tk.LEFT, padx=(0, 10))
+
+    def _guardar(self):
+        """Abre el diálogo del sistema para guardar el resumen como .txt."""
+        from pathlib import Path
+        from tkinter import filedialog
+        ruta = filedialog.asksaveasfilename(
+            title="Guardar resumen",
+            defaultextension=".txt",
+            filetypes=[("Archivo de texto", "*.txt")],
+            initialfile="resumen.txt",
+        )
+        if ruta:
+            Path(ruta).write_text(self._texto, encoding="utf-8")
+            from tkinter import messagebox
+            messagebox.showinfo("Guardado", f"Resumen guardado en:\n{ruta}", parent=self)
+
+    def _enviar_tts(self):
+        """Cierra el diálogo y abre la pantalla de TTS con el resumen pre-cargado."""
+        self.destroy()
+        self._on_ir_tts(self._texto)

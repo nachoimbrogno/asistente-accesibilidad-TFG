@@ -6,11 +6,11 @@ la navegación entre pantallas a lo largo de toda la sesión.
 """
 
 import tkinter as tk
-from tkinter import messagebox
 
 from db.database import Database
 from gui.content_view import ContentView
 from gui.document_upload import DocumentUpload
+from gui.history_screen import HistoryScreen
 from gui.login_screen import LoginScreen
 from gui.main_menu import MainMenu
 from gui.tts_screen import TTSScreen
@@ -159,9 +159,14 @@ class Aplicacion:
 
     def _on_historial(self):
         """Navega a la pantalla de historial (HU-009)."""
-        messagebox.showinfo(
-            "Próximamente",
-            "El historial de actividad se implementará en el Sprint 3.",
+        self._cambiar_pantalla(
+            HistoryScreen(
+                self._root,
+                self._usuario,
+                self._db,
+                self._logger,
+                on_volver=self._ir_menu,
+            )
         )
 
     # =====================================
