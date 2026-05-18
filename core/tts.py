@@ -2,13 +2,12 @@
 Módulo: tts.py
 HU-004 — Conversión de texto a voz (TTS)
 Convierte texto en audio usando pyttsx3 (síntesis de voz offline).
-La reproducción se divide en oraciones para permitir pausar y detener
-en cualquier momento sin esperar a que todo el texto termine.
+La reproducción pasa el texto completo en un único motor.say() seguido
+de un único runAndWait(): en Windows, el driver SAPI5 solo procesa el
+primer utterance cuando se encolan múltiples say() desde un hilo de fondo.
 """
 
-import re
 import threading
-import time
 from datetime import datetime
 from pathlib import Path
 
@@ -23,10 +22,10 @@ _DIR_SALIDA = Path(__file__).parent.parent / "storage" / "outputs"
 # Estado de reproducción (compartido entre hilos)
 # =====================================
 
-_parado  = threading.Event()   # señal para detener la reproducción
-_pausado = threading.Event()   # señal para pausar entre oraciones
+_parado  = threading.Event()   # señal para detener definitivamente
+_pausado = threading.Event()   # señal para pausar
 _lock    = threading.Lock()    # protege el acceso a _motor_activo
-_motor_activo = None           # referencia al motor en curso para poder interrumpirlo
+_motor_activo = None           # motor en curso (para poder interrumpirlo)
 
 
 # =====================================
@@ -39,10 +38,10 @@ def reproducir(
     volumen: float = _VOLUMEN_DEFAULT,
 ) -> None:
     """
-    Reproduce el texto por los altavoces dividiéndolo en oraciones.
-    Entre oración y oración verifica si se solicitó pausa o detención,
-    lo que permite responder a esas acciones sin esperar al final del texto.
-    La llamada es bloqueante: retorna cuando termina, se detiene o se interrumpe.
+    Reproduce el texto completo por los altavoces.
+    Usa un único motor.say() + motor.runAndWait() (mismo patrón que
+    convertir_a_audio) porque el driver SAPI5 de Windows no procesa
+    utterances adicionales cuando se encolan múltiples say() desde un hilo.
 
     Parámetros:
         texto:     texto a reproducir (no puede estar vacío).
@@ -57,50 +56,48 @@ def reproducir(
     _parado.clear()
     _pausado.clear()
 
-    for oracion in _dividir_oraciones(texto):
-        if _parado.is_set():
-            break
+    motor = _crear_motor(velocidad, volumen)
+    with _lock:
+        _motor_activo = motor
 
-        # Esperar mientras está pausado (polling fino para detectar detención)
-        while _pausado.is_set():
-            if _parado.is_set():
-                return
-            time.sleep(0.05)
-
-        if _parado.is_set():
-            break
-
-        motor = _crear_motor(velocidad, volumen)
+    try:
+        motor.say(texto)
+        motor.runAndWait()
+    finally:
         with _lock:
-            _motor_activo = motor
+            if _motor_activo is motor:
+                _motor_activo = None
         try:
-            motor.say(oracion)
-            motor.runAndWait()
-        finally:
-            with _lock:
-                if _motor_activo is motor:
-                    _motor_activo = None
             motor.stop()
+        except Exception:
+            pass
 
 
 def pausar() -> None:
     """
-    Pausa la reproducción. El texto en curso termina su oración actual
-    y luego la reproducción queda en espera hasta que se llame a reanudar().
+    Pausa la reproducción interrumpiendo el motor inmediatamente.
+    Al reanudar, la reproducción vuelve a empezar desde el principio.
     """
+    global _motor_activo
     _pausado.set()
+    with _lock:
+        if _motor_activo is not None:
+            try:
+                _motor_activo.stop()
+            except Exception:
+                pass
 
 
 def reanudar() -> None:
-    """Reanuda la reproducción desde la siguiente oración."""
+    """
+    Limpia el flag de pausa.
+    La GUI debe iniciar un nuevo hilo con reproducir() para retomar.
+    """
     _pausado.clear()
 
 
 def detener() -> None:
-    """
-    Detiene la reproducción interrumpiendo la oración en curso.
-    Envía la señal al motor activo para que corte el audio inmediatamente.
-    """
+    """Detiene la reproducción inmediatamente de forma definitiva."""
     global _motor_activo
     _parado.set()
     _pausado.clear()
@@ -171,23 +168,6 @@ def obtener_voces() -> list[dict]:
 # =====================================
 # Helpers internos
 # =====================================
-
-def _dividir_oraciones(texto: str) -> list[str]:
-    """
-    Divide el texto en oraciones usando la puntuación como delimitador.
-    También separa por saltos de línea para manejar listas y párrafos.
-    Las porciones vacías o con solo espacios se descartan.
-    """
-    # Dividir por punto, exclamación, interrogación seguidos de espacio
-    partes = re.split(r'(?<=[.!?])\s+', texto.strip())
-    oraciones = []
-    for parte in partes:
-        for sub in parte.splitlines():
-            sub = sub.strip()
-            if sub:
-                oraciones.append(sub)
-    return oraciones
-
 
 def _crear_motor(velocidad: int, volumen: float) -> pyttsx3.Engine:
     """

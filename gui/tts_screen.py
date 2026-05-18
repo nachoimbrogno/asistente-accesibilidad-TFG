@@ -238,16 +238,30 @@ class TTSScreen(tk.Frame):
         hilo.start()
 
     def _pausar(self):
-        """Pausa la reproducción entre oraciones."""
+        """Interrumpe la reproducción (el motor se detiene inmediatamente)."""
         tts.pausar()
         self._set_estado("paused")
-        self._mostrar_estado("En pausa.")
+        self._mostrar_estado("En pausa. Presioná Reanudar para empezar de nuevo.")
 
     def _reanudar(self):
-        """Reanuda la reproducción desde la siguiente oración."""
+        """
+        Inicia una nueva reproducción desde el principio.
+        El motor anterior ya fue detenido por pausar(), así que hay que
+        crear un hilo nuevo con el texto completo del widget.
+        """
         tts.reanudar()
+        texto = self._txt.get("1.0", tk.END).strip()
+        if not texto:
+            self._set_estado("idle")
+            return
         self._set_estado("playing")
         self._mostrar_estado("Reproduciendo...")
+        hilo = threading.Thread(
+            target=self._hilo_reproducir,
+            args=(texto,),
+            daemon=True,
+        )
+        hilo.start()
 
     def _detener_reproduccion(self):
         """Detiene la reproducción inmediatamente."""
@@ -275,9 +289,14 @@ class TTSScreen(tk.Frame):
             self.after(0, self._on_fin_reproduccion)
 
     def _on_fin_reproduccion(self):
-        """Llamado en el hilo principal cuando la reproducción termina (por cualquier causa)."""
-        self._set_estado("idle")
-        self._mostrar_estado("")
+        """
+        Llamado en el hilo principal cuando el hilo de reproducción termina.
+        Si el estado es 'paused' lo dejamos así (pausar() ya lo puso); solo
+        reseteamos a idle cuando la reproducción terminó de verdad o fue detenida.
+        """
+        if self._estado != "paused":
+            self._set_estado("idle")
+            self._mostrar_estado("")
 
     def _guardar_audio(self):
         """
