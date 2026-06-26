@@ -310,19 +310,63 @@ class ContentView(tk.Frame):
     def _generar_resumen(self):
         """
         Genera un resumen extractivo del texto mostrado (HU-010).
-        Abre un diálogo con el resumen y opciones para guardarlo o enviarlo a TTS.
+        Persiste el resultado en disco y BD siguiendo el mismo patrón que OCR/STT:
+          1. Genera el resumen con sumy (LexRank).
+          2. Guarda el .txt en storage/outputs/ vía summarizer.guardar_resultado().
+          3. Registra el proceso (tipo RESUMEN) y su resultado en la BD.
+          4. Registra el evento en la tabla log para el historial (HU-009).
+          5. Abre el diálogo modal con opciones de guardado manual y TTS.
+        Si la persistencia falla después de crear el proceso, este se marca como
+        'error' para no dejar registros a medias en la BD.
         """
         if not self._texto_resultado:
             return
+
+        # =====================================
+        # Generación del resumen
+        # =====================================
         try:
             texto_resumen = summarizer.resumir(self._texto_resultado)
         except ValueError as e:
             messagebox.showwarning("Texto insuficiente", str(e))
             return
 
+        # =====================================
+        # Persistencia en disco y BD
+        # =====================================
+        archivo = self._obtener_archivo()
+        nombre_base = Path(archivo["ruta"]).name
+        proceso_id_resumen = None
+
+        try:
+            ruta_resumen = summarizer.guardar_resultado(texto_resumen, nombre_base)
+
+            proceso_id_resumen = self._db.registrar_proceso(
+                self._usuario["id"],
+                "RESUMEN",
+                self._archivo_id,
+                self._modo,
+            )
+            self._db.actualizar_estado_proceso(proceso_id_resumen, "completado")
+            self._db.registrar_resultado(proceso_id_resumen, ruta_resumen, "txt")
+
+        except Exception as e:
+            if proceso_id_resumen is not None:
+                self._db.actualizar_estado_proceso(proceso_id_resumen, "error")
+            self._logger.log(
+                ERROR,
+                f"Error al persistir resumen: {e}",
+                usuario_id=self._usuario["id"],
+            )
+            messagebox.showerror(
+                "Error",
+                f"El resumen se generó pero no pudo guardarse:\n{e}",
+            )
+            return
+
         self._logger.log(
             LOG_RESUMEN,
-            f"Resumen generado (proceso_id={self._proceso_id})",
+            f"Resumen generado y persistido (proceso_id={proceso_id_resumen})",
             usuario_id=self._usuario["id"],
         )
         _DialogoResumen(self, texto_resumen, self._on_ir_tts)

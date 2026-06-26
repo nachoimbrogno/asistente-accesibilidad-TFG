@@ -61,8 +61,6 @@ Todo el procesamiento se realiza de forma **local y offline**. La única excepci
 │
 └── /docs
     ├── HU.md
-    ├── DER.png
-    └── ClassDiagram.png
 ```
 
 ---
@@ -249,8 +247,6 @@ La base de datos SQLite se crea automáticamente en `storage/app.db` en el prime
 ## Documentación adicional
 
 - `docs/HU.md` — Detalle completo de las historias de usuario
-- `docs/DER.png` — Diagrama entidad-relación de la base de datos
-- `docs/ClassDiagram.png` — Diagrama de clases del prototipo
 
 ---
 
